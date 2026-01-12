@@ -1,0 +1,11 @@
+# Sensitive files - DO NOT COMMIT
+blink_token.json
+*.pyc
+__pycache__/
+blink_downloads/
+.DS_Store
+
+# Temp files
+*.tmp
+*.log
+
