@@ -16,19 +16,13 @@ struct ContentView: View {
         ZStack {
             if apiService.isAuthenticated {
                 MainTabView(authViewModel: authViewModel)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 1.05)),
-                        removal: .opacity.combined(with: .scale(scale: 0.95))
-                    ))
+                    .transition(.opacity)
             } else {
                 LoginView(authViewModel: authViewModel)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 1.05)),
-                        removal: .opacity.combined(with: .scale(scale: 0.95))
-                    ))
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: apiService.isAuthenticated)
+        .animation(.easeInOut(duration: 0.3), value: apiService.isAuthenticated)
     }
 }
 
@@ -36,560 +30,503 @@ struct ContentView: View {
 
 struct MainTabView: View {
     @ObservedObject var authViewModel: AuthViewModel
-    @State private var selectedTab: Tab = .home
-    
-    enum Tab {
-        case home
-        case clips
-        case settings
-    }
+    @State private var selectedTab: Int = 0
     
     var body: some View {
-        ZStack {
-            Color(hex: "0D0D0D")
-                .ignoresSafeArea()
+        ZStack(alignment: .bottom) {
+            // Content
+            TabView(selection: $selectedTab) {
+                HomeView(authViewModel: authViewModel)
+                    .tag(0)
+                
+                ClipsView()
+                    .tag(1)
+                
+                SettingsView(authViewModel: authViewModel)
+                    .tag(2)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
             
-            VStack(spacing: 0) {
-                // Content
-                ZStack {
-                    switch selectedTab {
-                    case .home:
-                        DashboardContentView(authViewModel: authViewModel)
-                    case .clips:
-                        ClipsView()
-                    case .settings:
-                        FullSettingsView(authViewModel: authViewModel)
-                    }
+            // Custom Tab Bar
+            HStack(spacing: 0) {
+                TabButton(icon: "house", label: "Home", isSelected: selectedTab == 0) {
+                    selectedTab = 0
                 }
                 
-                // Bottom Tab Bar
-                CustomTabBar(selectedTab: $selectedTab)
+                TabButton(icon: "play.rectangle.on.rectangle", label: "Clips", isSelected: selectedTab == 1) {
+                    selectedTab = 1
+                }
+                
+                TabButton(icon: "gearshape", label: "Settings", isSelected: selectedTab == 2) {
+                    selectedTab = 2
+                }
             }
+            .padding(.horizontal, 40)
+            .padding(.top, 16)
+            .padding(.bottom, 30)
+            .background(
+                Color.white
+                    .shadow(color: .black.opacity(0.08), radius: 20, y: -5)
+            )
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
-// MARK: - Custom Tab Bar
-
-struct CustomTabBar: View {
-    @Binding var selectedTab: MainTabView.Tab
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            TabBarItem(
-                icon: "house.fill",
-                title: "Home",
-                isSelected: selectedTab == .home
-            ) {
-                selectedTab = .home
-            }
-            
-            TabBarItem(
-                icon: "film.stack",
-                title: "Clips",
-                isSelected: selectedTab == .clips
-            ) {
-                selectedTab = .clips
-            }
-            
-            TabBarItem(
-                icon: "gearshape.fill",
-                title: "Settings",
-                isSelected: selectedTab == .settings
-            ) {
-                selectedTab = .settings
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 30)
-                .fill(Color(hex: "1A1A1A"))
-        )
-        .padding(.horizontal, 30)
-        .padding(.bottom, 20)
-    }
-}
-
-struct TabBarItem: View {
+struct TabButton: View {
     let icon: String
-    let title: String
+    let label: String
     let isSelected: Bool
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Image(systemName: icon)
+                Image(systemName: isSelected ? "\(icon).fill" : icon)
                     .font(.system(size: 22, weight: .medium))
                 
-                Text(title)
+                Text(label)
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(isSelected ? Color(hex: "00E5CC") : .white.opacity(0.4))
+            .foregroundColor(isSelected ? Color(hex: "1A1A1A") : Color(hex: "1A1A1A").opacity(0.35))
             .frame(maxWidth: .infinity)
         }
     }
 }
 
-// MARK: - Dashboard Content (without tab bar)
+// MARK: - Home View
 
-struct DashboardContentView: View {
+struct HomeView: View {
     @ObservedObject var authViewModel: AuthViewModel
     @StateObject private var camerasViewModel = CamerasViewModel()
     @State private var selectedCamera: CameraDisplay?
-    @State private var selectedRoom: String = "All"
-    
-    private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16)
-    ]
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
-                .padding(.top, 10)
-            
-            if camerasViewModel.isLoading && camerasViewModel.cameras.isEmpty {
-                Spacer()
-                loadingView
-                Spacer()
-            } else if let error = camerasViewModel.errorMessage {
-                Spacer()
-                errorView(message: error)
-                Spacer()
-            } else if camerasViewModel.cameras.isEmpty {
-                Spacer()
-                emptyView
-                Spacer()
-            } else {
-                // Room filter chips
-                roomFilterView
-                    .padding(.top, 20)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                Text("Welcome Chai!")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(Color(hex: "1A1A1A"))
+                    .padding(.top, 60)
                 
-                // Section header
-                HStack {
-                    Text("Real time")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                    Spacer()
+                // Cameras
+                if camerasViewModel.isLoading && camerasViewModel.cameras.isEmpty {
+                    loadingState
+                } else if camerasViewModel.cameras.isEmpty {
+                    emptyState
+                } else {
+                    camerasGrid
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 12)
-                
-                // Camera grid
-                cameraGrid
             }
-            
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 100)
+        }
+        .background(Color.white)
+        .refreshable {
+            await camerasViewModel.loadCameras()
         }
         .fullScreenCover(item: $selectedCamera) { camera in
-            CameraDetailView(camera: camera, camerasViewModel: camerasViewModel)
+            LiveViewScreen(camera: camera, camerasViewModel: camerasViewModel)
         }
         .task {
             await camerasViewModel.loadCameras()
         }
     }
     
-    // MARK: - Header View
-    
-    private var headerView: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Hello, \(camerasViewModel.session?.username.components(separatedBy: "@").first ?? "User")")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            
-            Spacer()
-            
-            Button {
-                Task {
-                    await camerasViewModel.loadCameras()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.08))
-                    .clipShape(Circle())
-            }
-            .disabled(camerasViewModel.isLoading)
-        }
-        .padding(.horizontal, 20)
-    }
-    
-    // MARK: - Room Filter View
-    
-    private var roomFilterView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(getRoomNames(), id: \.self) { room in
-                    RoomChip(
-                        name: room,
-                        icon: iconForRoom(room),
-                        isSelected: selectedRoom == room
-                    ) {
-                        withAnimation(.spring(response: 0.3)) {
-                            selectedRoom = room
-                        }
-                    }
+    private var camerasGrid: some View {
+        VStack(spacing: 12) {
+            ForEach(camerasViewModel.cameras) { camera in
+                LargeCameraCard(
+                    camera: camera,
+                    thumbnailData: camerasViewModel.thumbnails[camera.id]
+                )
+                .onTapGesture {
+                    selectedCamera = camera
                 }
             }
-            .padding(.horizontal, 20)
         }
     }
     
-    private func getRoomNames() -> [String] {
-        var rooms = ["All"]
-        rooms.append(contentsOf: camerasViewModel.cameras.map { $0.name })
-        return rooms
-    }
-    
-    private func iconForRoom(_ room: String) -> String {
-        let lowercased = room.lowercased()
-        if lowercased.contains("living") { return "sofa.fill" }
-        if lowercased.contains("bed") { return "bed.double.fill" }
-        if lowercased.contains("bath") { return "shower.fill" }
-        if lowercased.contains("kitchen") { return "refrigerator.fill" }
-        if lowercased.contains("garage") { return "car.fill" }
-        if lowercased.contains("front") || lowercased.contains("door") { return "door.left.hand.closed" }
-        if lowercased.contains("back") { return "tree.fill" }
-        if lowercased.contains("office") { return "desktopcomputer" }
-        return "video.fill"
-    }
-    
-    // MARK: - Camera Grid
-    
-    private var cameraGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(filteredCameras) { camera in
-                    CameraGridCard(
-                        camera: camera,
-                        thumbnailData: camerasViewModel.thumbnails[camera.id]
-                    )
-                    .onTapGesture {
-                        selectedCamera = camera
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-        }
-        .refreshable {
-            await camerasViewModel.loadCameras()
-        }
-    }
-    
-    private var filteredCameras: [CameraDisplay] {
-        if selectedRoom == "All" {
-            return camerasViewModel.cameras
-        }
-        return camerasViewModel.cameras.filter { $0.name == selectedRoom }
-    }
-    
-    // MARK: - Loading View
-    
-    private var loadingView: some View {
-        VStack(spacing: 20) {
+    private var loadingState: some View {
+        VStack(spacing: 16) {
             ProgressView()
-                .scaleEffect(1.5)
-                .tint(Color(hex: "00E5CC"))
-            
+                .tint(Color(hex: "1A1A1A"))
             Text("Loading cameras...")
+                .font(.system(size: 14))
+                .foregroundColor(Color(hex: "999999"))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "video.slash")
+                .font(.system(size: 40))
+                .foregroundColor(Color(hex: "CCCCCC"))
+            
+            Text("No cameras found")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(Color(hex: "999999"))
         }
-    }
-    
-    // MARK: - Error View
-    
-    private func errorView(message: String) -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 50))
-                .foregroundColor(Color(hex: "FF6B6B"))
-            
-            Text("Something went wrong")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-            
-            Text(message)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-            
-            Button {
-                Task {
-                    await camerasViewModel.loadCameras()
-                }
-            } label: {
-                Text("Try Again")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: "0D0D0D"))
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 12)
-                    .background(Color(hex: "00E5CC"))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-        }
-        .padding(.horizontal, 40)
-    }
-    
-    // MARK: - Empty View
-    
-    private var emptyView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "video.slash.fill")
-                .font(.system(size: 50))
-                .foregroundColor(.white.opacity(0.3))
-            
-            Text("No Cameras Found")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-            
-            Text("Make sure your Blink cameras are set up and online")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, 40)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 }
 
-// MARK: - Full Settings View (standalone)
+// MARK: - Camera Card
 
-struct FullSettingsView: View {
+struct LargeCameraCard: View {
+    let camera: CameraDisplay
+    let thumbnailData: Data?
+    
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            // Thumbnail
+            if let data = thumbnailData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 160)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color(hex: "F0F0F0"))
+                    .frame(height: 160)
+                    .overlay(
+                        ProgressView()
+                            .tint(Color(hex: "CCCCCC"))
+                    )
+            }
+            
+            // Gradient overlay
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.5)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            
+            // Camera info
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(camera.name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(camera.isEnabled ? Color(hex: "4CD964") : Color(hex: "FF3B30"))
+                            .frame(width: 6, height: 6)
+                        Text(camera.isEnabled ? "Online" : "Offline")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+                Spacer()
+            }
+            .padding(14)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+
+// MARK: - Live View Screen (Simplified)
+
+struct LiveViewScreen: View {
+    let camera: CameraDisplay
+    @ObservedObject var camerasViewModel: CamerasViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentImage: UIImage?
+    @State private var isRefreshing = false
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            // Camera feed
+            if let image = currentImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .ignoresSafeArea()
+            } else if let data = camerasViewModel.thumbnails[camera.id],
+                      let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .ignoresSafeArea()
+            } else {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Loading...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+            }
+            
+            // Minimal overlay
+        VStack {
+                // Top bar
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(spacing: 2) {
+                        Text(camera.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            Text("Live")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Placeholder for balance
+                    Color.clear
+                        .frame(width: 36, height: 36)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 60)
+                
+                Spacer()
+                
+                // Refreshing indicator
+                if isRefreshing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.8)
+                        Text("Refreshing...")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(Capsule())
+                    .padding(.bottom, 50)
+                }
+            }
+        }
+        .task {
+            await startLiveRefresh()
+        }
+    }
+    
+    private func startLiveRefresh() async {
+        let apiService = BlinkAPIService.shared
+        
+        while !Task.isCancelled {
+            isRefreshing = true
+            
+            do {
+                // Request new snapshot based on camera type
+                if camera.type == .mini {
+                    try await apiService.requestOwlSnapshot(
+                        networkId: camera.networkId,
+                        cameraId: camera.id
+                    )
+                } else {
+                    try await apiService.requestSnapshot(
+                        networkId: camera.networkId,
+                        cameraId: camera.id
+                    )
+                }
+                
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+                
+                if let thumbnailURL = camera.thumbnailURL,
+                   let data = try? await apiService.getThumbnail(url: thumbnailURL) {
+                    await MainActor.run {
+                        currentImage = UIImage(data: data)
+                    }
+                }
+            } catch {
+                print("Live refresh error: \(error)")
+            }
+            
+            isRefreshing = false
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+    }
+}
+
+// MARK: - Settings View
+
+struct SettingsView: View {
     @ObservedObject var authViewModel: AuthViewModel
     @StateObject private var driveService = GoogleDriveService.shared
     @State private var isConnectingDrive = false
-    @State private var driveError: String?
     @State private var showDisconnectAlert = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Settings")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 24)
+        ZStack {
+            Color(hex: "F5F5F5")
+                .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Account section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("BLINK ACCOUNT")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.5))
-                            .tracking(2)
-                        
-                        HStack {
-                            Image(systemName: "person.circle.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(Color(hex: "00E5CC"))
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    Text("Settings")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(Color(hex: "1A1A1A"))
+                        .padding(.top, 60)
+                    
+                    // Account
+                    SettingsSection(title: "Account") {
+                        HStack(spacing: 14) {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "667EEA"), Color(hex: "764BA2")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 50, height: 50)
+                                .overlay(
+                                    Text(String(BlinkAPIService.shared.session?.username.prefix(1).uppercased() ?? "U"))
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(.white)
+                                )
                             
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(BlinkAPIService.shared.session?.username ?? "Unknown")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(Color(hex: "1A1A1A"))
                                 
-                                Text("Account ID: \(BlinkAPIService.shared.session?.accountId ?? 0)")
+                                Text("Blink Account")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(Color(hex: "666666"))
                             }
                             
                             Spacer()
                         }
                         .padding(16)
-                        .background(Color.white.opacity(0.05))
+                        .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
                     }
                     
-                    // Google Drive section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("CLOUD STORAGE")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.5))
-                            .tracking(2)
-                        
-                        VStack(spacing: 0) {
-                            HStack(spacing: 16) {
-                                // Google Drive icon
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color(hex: "4285F4"), Color(hex: "34A853")],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
+                    // Cloud Storage
+                    SettingsSection(title: "Cloud Storage") {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color(hex: "4285F4"), Color(hex: "34A853")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
                                         )
-                                        .frame(width: 44, height: 44)
-                                    
-                                    Image(systemName: "externaldrive.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.white)
-                                }
+                                    )
+                                    .frame(width: 44, height: 44)
                                 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Google Drive")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white)
-                                    
-                                    if driveService.isAuthenticated {
-                                        HStack(spacing: 4) {
-                                            Circle()
-                                                .fill(Color.green)
-                                                .frame(width: 8, height: 8)
-                                            Text("Connected")
-                                                .font(.system(size: 13))
-                                                .foregroundColor(.green)
-                                        }
-                                    } else {
-                                        Text("Not connected")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                }
-                                
-                                Spacer()
+                                Image(systemName: "externaldrive.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Google Drive")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(Color(hex: "1A1A1A"))
                                 
                                 if driveService.isAuthenticated {
-                                    Button {
-                                        showDisconnectAlert = true
-                                    } label: {
-                                        Text("Disconnect")
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(Color(hex: "FF6B6B"))
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color(hex: "FF6B6B").opacity(0.15))
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
+                                    Text("Connected")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.green)
                                 } else {
-                                    Button {
-                                        Task {
-                                            await connectGoogleDrive()
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            if isConnectingDrive {
-                                                ProgressView()
-                                                    .scaleEffect(0.7)
-                                                    .tint(.white)
-                                            }
-                                            Text(isConnectingDrive ? "Connecting..." : "Connect")
-                                                .font(.system(size: 13, weight: .medium))
-                                        }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color(hex: "4285F4"))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
-                                    .disabled(isConnectingDrive)
+                                    Text("Not connected")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Color(hex: "666666"))
                                 }
                             }
-                            .padding(16)
+                            
+                            Spacer()
                             
                             if driveService.isAuthenticated {
-                                Divider().background(Color.white.opacity(0.1))
-                                
-                                HStack {
-                                    Image(systemName: "folder.fill")
-                                        .foregroundColor(Color(hex: "00E5CC"))
-                                    Text("Clips will be saved to")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.white.opacity(0.6))
-                                    Spacer()
-                                    Text("Blink Clips")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.white)
+                                Button("Disconnect") {
+                                    showDisconnectAlert = true
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.red)
+                            } else {
+                                Button {
+                                    Task {
+                                        isConnectingDrive = true
+                                        try? await driveService.signIn()
+                                        isConnectingDrive = false
+                                    }
+                                } label: {
+                                    if isConnectingDrive {
+                                        ProgressView()
+                                            .tint(Color(hex: "4285F4"))
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Text("Connect")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                }
+                                .foregroundColor(Color(hex: "4285F4"))
                             }
                         }
-                        .background(Color.white.opacity(0.05))
+                        .padding(16)
+                        .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        
-                        if let error = driveError {
-                            Text(error)
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "FF6B6B"))
-                                .padding(.horizontal, 4)
-                        }
-                        
-                        if driveService.isAuthenticated {
-                            Text("Videos you save from Clips will be uploaded to your Google Drive in the 'Blink Clips' folder.")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.4))
-                                .padding(.horizontal, 4)
-                        }
+                        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
                     }
                     
-                    // Session info
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("SESSION")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.5))
-                            .tracking(2)
-                        
+                    // About
+                    SettingsSection(title: "About") {
                         VStack(spacing: 0) {
-                            settingsInfoRow(title: "Region", value: BlinkAPIService.shared.session?.region ?? "Unknown")
-                            Divider().background(Color.white.opacity(0.1))
-                            settingsInfoRow(title: "Host", value: BlinkAPIService.shared.session?.host ?? "Unknown")
+                            SettingsRow(label: "Version", value: "1.0.0")
+                            Divider().padding(.horizontal, 16)
+                            SettingsRow(label: "Region", value: BlinkAPIService.shared.session?.region ?? "-")
                         }
-                        .background(Color.white.opacity(0.05))
+                        .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
                     }
                     
-                    // About section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("ABOUT")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.5))
-                            .tracking(2)
-                        
-                        VStack(spacing: 0) {
-                            settingsInfoRow(title: "App Version", value: "1.0.0")
-                            Divider().background(Color.white.opacity(0.1))
-                            settingsInfoRow(title: "Build", value: "2026.01")
-                        }
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                    }
+                    Spacer(minLength: 20)
                     
-                    Spacer(minLength: 40)
-                    
-                    // Logout button
+                    // Sign Out
                     Button {
                         authViewModel.logout()
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text("Sign Out of Blink")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundColor(Color(hex: "FF6B6B"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color(hex: "FF6B6B").opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        Text("Sign Out")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 120)
             }
         }
         .alert("Disconnect Google Drive?", isPresented: $showDisconnectAlert) {
@@ -597,36 +534,39 @@ struct FullSettingsView: View {
             Button("Disconnect", role: .destructive) {
                 driveService.signOut()
             }
-        } message: {
-            Text("You'll need to sign in again to save clips to Google Drive.")
         }
     }
+}
+
+struct SettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
     
-    private func connectGoogleDrive() async {
-        isConnectingDrive = true
-        driveError = nil
-        
-        do {
-            try await driveService.signIn()
-        } catch GoogleDriveError.cancelled {
-            // User cancelled, no error needed
-        } catch {
-            driveError = error.localizedDescription
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title.uppercased())
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(hex: "999999"))
+                .tracking(1)
+            
+            content
         }
-        
-        isConnectingDrive = false
     }
+}
+
+struct SettingsRow: View {
+    let label: String
+    let value: String
     
-    private func settingsInfoRow(title: String, value: String) -> some View {
+    var body: some View {
         HStack {
-            Text(title)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(Color(hex: "666666"))
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(1)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(Color(hex: "1A1A1A"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
