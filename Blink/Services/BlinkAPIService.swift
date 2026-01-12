@@ -727,6 +727,72 @@ final class BlinkAPIService: ObservableObject {
         }
     }
     
+    // MARK: - Arm/Disarm Network
+    
+    func armNetwork(networkId: Int) async throws {
+        guard let session = session else {
+            throw BlinkAPIError.authRequired
+        }
+        
+        let url = URL(string: "\(session.baseURL)/api/v1/accounts/\(session.accountId)/networks/\(networkId)/state/arm")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        for (key, value) in authorizedHeader() {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        
+        let (data, response) = try await urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BlinkAPIError.invalidResponse
+        }
+        
+        print("🔒 Arm response (\(httpResponse.statusCode)): \(String(data: data, encoding: .utf8) ?? "")")
+        
+        switch httpResponse.statusCode {
+        case 200...299:
+            return
+        case 401:
+            logout()
+            throw BlinkAPIError.unauthorized
+        default:
+            throw BlinkAPIError.serverError(httpResponse.statusCode, nil)
+        }
+    }
+    
+    func disarmNetwork(networkId: Int) async throws {
+        guard let session = session else {
+            throw BlinkAPIError.authRequired
+        }
+        
+        let url = URL(string: "\(session.baseURL)/api/v1/accounts/\(session.accountId)/networks/\(networkId)/state/disarm")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        for (key, value) in authorizedHeader() {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        
+        let (data, response) = try await urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BlinkAPIError.invalidResponse
+        }
+        
+        print("🔓 Disarm response (\(httpResponse.statusCode)): \(String(data: data, encoding: .utf8) ?? "")")
+        
+        switch httpResponse.statusCode {
+        case 200...299:
+            return
+        case 401:
+            logout()
+            throw BlinkAPIError.unauthorized
+        default:
+            throw BlinkAPIError.serverError(httpResponse.statusCode, nil)
+        }
+    }
+    
     func getVideoData(url videoPath: String) async throws -> Data {
         guard let session = session else {
             throw BlinkAPIError.authRequired
@@ -753,6 +819,7 @@ final class BlinkAPIService: ObservableObject {
         
         return data
     }
+    
 }
 
 // Helper class to prevent automatic redirect following

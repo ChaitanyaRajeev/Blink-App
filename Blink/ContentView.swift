@@ -103,12 +103,24 @@ struct HomeView: View {
     
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                Text("Welcome Chai!")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(Color(hex: "1A1A1A"))
-                    .padding(.top, 60)
+            VStack(alignment: .leading, spacing: 45) {
+                // Header with arm toggle
+                HStack {
+                    Text("Welcome Chai!")
+                        .font(.system(size: 27, weight: .bold))
+                        .foregroundColor(Color(hex: "1A1A1A"))
+                    
+                    Spacer()
+                    
+                    // Mini toggle
+                    MiniArmToggle(
+                        isArmed: camerasViewModel.isArmed,
+                        isLoading: camerasViewModel.isArming
+                    ) {
+                        Task { await camerasViewModel.toggleArm() }
+                    }
+                }
+                .padding(.top, 30)
                 
                 // Cameras
                 if camerasViewModel.isLoading && camerasViewModel.cameras.isEmpty {
@@ -116,7 +128,7 @@ struct HomeView: View {
                 } else if camerasViewModel.cameras.isEmpty {
                     emptyState
                 } else {
-                    camerasGrid
+                    devicesGrid
                 }
             }
             .padding(.horizontal, 20)
@@ -134,8 +146,9 @@ struct HomeView: View {
         }
     }
     
-    private var camerasGrid: some View {
+    private var devicesGrid: some View {
         VStack(spacing: 12) {
+            // Cameras
             ForEach(camerasViewModel.cameras) { camera in
                 LargeCameraCard(
                     camera: camera,
@@ -144,6 +157,11 @@ struct HomeView: View {
                 .onTapGesture {
                     selectedCamera = camera
                 }
+            }
+            
+            // Sync modules
+            ForEach(camerasViewModel.syncModules) { module in
+                SyncModuleCard(module: module)
             }
         }
     }
@@ -175,6 +193,101 @@ struct HomeView: View {
     }
 }
 
+// MARK: - Mini Arm Toggle
+
+struct MiniArmToggle: View {
+    let isArmed: Bool
+    let isLoading: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                // Toggle track
+                ZStack(alignment: isArmed ? .trailing : .leading) {
+                    Capsule()
+                        .fill(isArmed ? Color(hex: "4CD964") : Color(hex: "FF3B30"))
+                        .frame(width: 44, height: 26)
+                    
+                    // Knob
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 22, height: 22)
+                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                        .padding(.horizontal, 2)
+                }
+                .animation(.easeInOut(duration: 0.2), value: isArmed)
+                
+                // Label
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(Color(hex: "999999"))
+                } else {
+                    Text(isArmed ? "Armed" : "Disarmed")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color(hex: "666666"))
+                }
+            }
+        }
+        .disabled(isLoading)
+    }
+}
+
+// MARK: - Sync Module Card
+
+struct SyncModuleCard: View {
+    let module: BlinkSyncModule
+    
+    var isOnline: Bool {
+        module.status?.lowercased() == "online"
+    }
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            // Icon
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: 20))
+                .foregroundColor(Color(hex: "007AFF"))
+                .frame(width: 44, height: 44)
+                .background(Color(hex: "F5F5F5"))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(module.name ?? "Sync Module")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Color(hex: "1A1A1A"))
+                
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isOnline ? Color(hex: "4CD964") : Color(hex: "FF3B30"))
+                        .frame(width: 6, height: 6)
+                    Text(isOnline ? "Online" : "Offline")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(hex: "999999"))
+                }
+            }
+            
+            Spacer()
+            
+            // WiFi strength
+            if let wifi = module.wifiStrength {
+                HStack(spacing: 3) {
+                    Image(systemName: "wifi")
+                        .font(.system(size: 12))
+                    Text("\(wifi)/5")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(Color(hex: "999999"))
+            }
+        }
+        .padding(14)
+        .background(Color(hex: "F8F8F8"))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 // MARK: - Camera Card
 
 struct LargeCameraCard: View {
@@ -182,7 +295,7 @@ struct LargeCameraCard: View {
     let thumbnailData: Data?
     
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottom) {
             // Thumbnail
             if let data = thumbnailData, let uiImage = UIImage(data: data) {
                 Image(uiImage: uiImage)
@@ -202,14 +315,14 @@ struct LargeCameraCard: View {
             
             // Gradient overlay
             LinearGradient(
-                colors: [.clear, .black.opacity(0.5)],
+                colors: [.clear, .black.opacity(0.6)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             
             // Camera info
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(camera.name)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
@@ -220,14 +333,58 @@ struct LargeCameraCard: View {
                             .frame(width: 6, height: 6)
                         Text(camera.isEnabled ? "Online" : "Offline")
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.white.opacity(0.85))
                     }
                 }
+                
                 Spacer()
+                
+                // Stats row
+                HStack(spacing: 12) {
+                    // Battery
+                    if let battery = camera.batteryPercentage {
+                        HStack(spacing: 3) {
+                            Image(systemName: batteryIcon(percentage: battery))
+                                .font(.system(size: 11))
+                            Text("\(battery)%")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white.opacity(0.9))
+                    }
+                    
+                    // Temperature
+                    if let temp = camera.temperatureDisplay {
+                        HStack(spacing: 2) {
+                            Image(systemName: "thermometer.medium")
+                                .font(.system(size: 10))
+                            Text(temp)
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white.opacity(0.9))
+                    }
+                    
+                    // Signal
+                    if let signal = camera.signalStrength {
+                        HStack(spacing: 2) {
+                            Image(systemName: signal.icon)
+                                .font(.system(size: 10))
+                            Text(signal.label)
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white.opacity(0.9))
+                    }
+                }
             }
             .padding(14)
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private func batteryIcon(percentage: Int) -> String {
+        if percentage >= 75 { return "battery.100" }
+        if percentage >= 50 { return "battery.75" }
+        if percentage >= 25 { return "battery.50" }
+        return "battery.25"
     }
 }
 

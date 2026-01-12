@@ -101,14 +101,12 @@ struct ClipsView: View {
                     
                     Spacer()
                     
-                    // Upload to drive button (if video selected and drive connected)
+                    // Upload to Google Drive button (if video selected and drive connected)
                     if let clip = selectedClip, driveService.isAuthenticated {
                         Button {
                             uploadClipToDrive(clip)
                         } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "007AFF"))
+                            GoogleDriveIcon()
                                 .frame(width: 36, height: 36)
                                 .background(Color(hex: "F5F5F5"))
                                 .clipShape(Circle())
@@ -416,6 +414,22 @@ struct ClipsView: View {
         .padding(.vertical, 12)
         .background(Color(hex: "333333"))
         .clipShape(Capsule())
+    }
+}
+
+// MARK: - Google Drive Icon
+
+struct GoogleDriveIcon: View {
+    var body: some View {
+        Image(systemName: "externaldrive.fill.badge.plus")
+            .font(.system(size: 16))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Color(hex: "4285F4"), Color(hex: "34A853")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
     }
 }
 

@@ -158,6 +158,13 @@ struct BlinkSyncModule: Codable, Identifiable {
     }
 }
 
+struct BlinkCameraSignals: Codable {
+    let lfr: Int?
+    let wifi: Int?
+    let temp: Int?
+    let battery: Int?
+}
+
 struct BlinkCamera: Codable, Identifiable {
     let id: Int
     let name: String
@@ -170,13 +177,14 @@ struct BlinkCamera: Codable, Identifiable {
     let serial: String?
     let createdAt: String?
     let updatedAt: String?
+    let signals: BlinkCameraSignals?
     
     enum CodingKeys: String, CodingKey {
         case id, name
         case networkId = "network_id"
         case status, enabled, thumbnail
-        case batteryState = "battery_state"
-        case type, serial
+        case batteryState = "battery"
+        case type, serial, signals
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -194,6 +202,7 @@ struct BlinkCamera: Codable, Identifiable {
         serial = try? container.decodeIfPresent(String.self, forKey: .serial)
         createdAt = try? container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try? container.decodeIfPresent(String.self, forKey: .updatedAt)
+        signals = try? container.decodeIfPresent(BlinkCameraSignals.self, forKey: .signals)
     }
 }
 
@@ -268,6 +277,57 @@ struct CameraDisplay: Identifiable {
     var isEnabled: Bool
     var lastUpdated: Date?
     
+    // Signals from homescreen API (already formatted nicely)
+    var batteryBars: Int?      // 1-3 scale
+    var wifiBars: Int?         // 1-5 scale
+    var temperature: Int?      // Fahrenheit
+    
+    // Computed properties for display
+    var batteryPercentage: Int? {
+        guard let bars = batteryBars else { return nil }
+        // Convert 1-3 bars to percentage
+        switch bars {
+        case 3: return 100
+        case 2: return 66
+        case 1: return 33
+        default: return nil
+        }
+    }
+    
+    var temperatureDisplay: String? {
+        guard let temp = temperature else { return nil }
+        return "\(temp)°F"
+    }
+    
+    var signalStrength: SignalStrength? {
+        guard let bars = wifiBars else { return nil }
+        // WiFi is 1-5 scale
+        if bars >= 4 { return .excellent }
+        if bars >= 3 { return .good }
+        if bars >= 2 { return .fair }
+        return .weak
+    }
+    
+    enum SignalStrength {
+        case excellent, good, fair, weak
+        
+        var icon: String {
+            switch self {
+            case .excellent, .good, .fair: return "wifi"
+            case .weak: return "wifi.exclamationmark"
+            }
+        }
+        
+        var label: String {
+            switch self {
+            case .excellent: return "Excellent"
+            case .good: return "Good"
+            case .fair: return "Fair"
+            case .weak: return "Weak"
+            }
+        }
+    }
+    
     enum CameraType: String {
         case mini = "owl"
         case indoor = "catalina"
@@ -314,7 +374,10 @@ struct CameraDisplay: Identifiable {
             thumbnailURL: thumbnailURL,
             status: camera.status ?? "unknown",
             batteryState: camera.batteryState,
-            isEnabled: camera.enabled ?? false
+            isEnabled: camera.enabled ?? false,
+            batteryBars: camera.signals?.battery,
+            wifiBars: camera.signals?.wifi,
+            temperature: camera.signals?.temp
         )
     }
     
@@ -328,6 +391,7 @@ struct CameraDisplay: Identifiable {
             }
         }
         
+        // Mini cameras don't have battery/temp sensors
         return CameraDisplay(
             id: owl.id,
             name: owl.name,
@@ -336,7 +400,10 @@ struct CameraDisplay: Identifiable {
             thumbnailURL: thumbnailURL,
             status: owl.status ?? "unknown",
             batteryState: nil,
-            isEnabled: owl.enabled ?? false
+            isEnabled: owl.enabled ?? false,
+            batteryBars: nil,
+            wifiBars: nil,
+            temperature: nil
         )
     }
     
@@ -358,7 +425,10 @@ struct CameraDisplay: Identifiable {
             thumbnailURL: thumbnailURL,
             status: doorbell.status ?? "unknown",
             batteryState: nil,
-            isEnabled: doorbell.enabled ?? false
+            isEnabled: doorbell.enabled ?? false,
+            batteryBars: nil,
+            wifiBars: nil,
+            temperature: nil
         )
     }
 }

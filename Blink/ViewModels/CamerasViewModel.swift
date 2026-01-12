@@ -14,11 +14,18 @@ final class CamerasViewModel: ObservableObject {
     
     @Published var cameras: [CameraDisplay] = []
     @Published var networks: [BlinkNetwork] = []
+    @Published var syncModules: [BlinkSyncModule] = []
     @Published var isLoading = false
+    @Published var isArming = false
     @Published var errorMessage: String?
     @Published var thumbnails: [Int: Data] = [:]
     
     private let apiService = BlinkAPIService.shared
+    
+    var isArmed: Bool {
+        // Return true if any network is armed
+        networks.first?.armed ?? false
+    }
     
     var session: BlinkSession? {
         apiService.session
@@ -55,6 +62,10 @@ final class CamerasViewModel: ObservableObject {
             print("📹 Total cameras: \(allCameras.count)")
             self.cameras = allCameras
             self.networks = homescreen.networks ?? []
+            self.syncModules = homescreen.syncModules ?? []
+            
+            print("📡 Sync modules: \(syncModules.count)")
+            print("🔒 Armed: \(isArmed)")
             
             // Load thumbnails
             await loadAllThumbnails()
@@ -109,6 +120,27 @@ final class CamerasViewModel: ObservableObject {
         } catch {
             print("Failed to request recording: \(error)")
         }
+    }
+    
+    func toggleArm() async {
+        guard let network = networks.first else { return }
+        
+        isArming = true
+        
+        do {
+            if isArmed {
+                try await apiService.disarmNetwork(networkId: network.id)
+            } else {
+                try await apiService.armNetwork(networkId: network.id)
+            }
+            
+            // Refresh to get updated status
+            await loadCameras()
+        } catch {
+            errorMessage = "Failed to \(isArmed ? "disarm" : "arm"): \(error.localizedDescription)"
+        }
+        
+        isArming = false
     }
 }
 
